@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4f5bd5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.svg') }}">
+    <title>Saved Results - Optimal Sample Selection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Saved Results</h1>
+            <p class="subtitle">Database of Computation Results</p>
+        </header>
+
+        <main>
+            <section class="card">
+                <div id="records-list" class="records-list">
+                    <div class="loading"><span class="spinner"></span>Loading records...</div>
+                </div>
+            </section>
+
+            <section class="actions">
+                <button id="display-btn" class="btn btn-primary" disabled>View Details</button>
+                <button id="delete-btn" class="btn btn-danger" disabled>Delete</button>
+                <button id="back-btn" class="btn btn-secondary" onclick="window.location.href='/'">Back to Home</button>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal for displaying record details -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modal-title"></h2>
+            <div id="modal-info" class="modal-info"></div>
+            <div id="modal-groups" class="modal-groups"></div>
+            <div class="modal-actions">
+                <button id="modal-export-btn" class="btn btn-secondary">Export to File</button>
+                <button id="modal-close-btn" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let records = [];
+        let selectedRecordId = null;
+        let selectedRecord = null;
+
+        // Load all saved records
+        async function loadRecords() {
+            try {
+                const response = await fetch('/api/records');
+                records = await response.json();
+                displayRecords();
+            } catch (error) {
+                document.getElementById('records-list').innerHTML =
+                    `<div class="error">Failed to load records: ${error.message}</div>`;
+            }
+        }
+
+        function displayRecords() {
+            const container = document.getElementById('records-list');
+
+            if (records.length === 0) {
+                container.innerHTML = '<div class="info">No saved results yet. Run a computation and click "Save Result" to store it here.</div>';
+                return;
+            }
+
+            let html = '<div class="records-grid">';
+            records.forEach(rec => {
+                const p = rec.params;
+                const info = rec.info;
+                html += `
+                    <div class="record-card" data-id="${rec.id}">
+                        <div class="record-id">${rec.id}</div>
+                        <div class="record-details">
+                            <div>m=${p.m}, n=${p.n}, k=${p.k}, j=${p.j}, s=${p.s}, T=${p.T}</div>
+                            <div class="record-stats">
+                                ${info.solution_size} groups |
+                                Gap: ${info.gap} |
+                                ${info.method || 'heuristic'} |
+                                ${info.time}s
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+
+            // Card click handlers
+            document.querySelectorAll('.record-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    document.querySelectorAll('.record-card').forEach(c =>
+                        c.classList.remove('selected'));
+
+                    card.classList.add('selected');
+                    selectedRecordId = card.dataset.id;
+                    selectedRecord = records.find(r => r.id === selectedRecordId);
+
+                    document.getElementById('display-btn').disabled = false;
+                    document.getElementById('delete-btn').disabled = false;
+                });
+            });
+        }
+
+        // View Details button
+        document.getElementById('display-btn').addEventListener('click', () => {
+            if (!selectedRecord) return;
+
+            const modal = document.getElementById('modal');
+            const p = selectedRecord.params;
+            const info = selectedRecord.info;
+
+            const badgeClass = info.method === 'exact' ? 'exact' : 'heuristic';
+            document.getElementById('modal-title').textContent = selectedRecord.id;
+
+            document.getElementById('modal-info').innerHTML = `
+                <div><strong>Parameters:</strong> m=${p.m}, n=${p.n}, k=${p.k}, j=${p.j}, s=${p.s}, T=${p.T}</div>
+                <div><strong>Samples:</strong> ${selectedRecord.samples.join(', ')}</div>
+                <div><strong>Statistics:</strong> ${info.solution_size} groups |
+                    Lower bound: ${info.lower_bound} | Gap: ${info.gap} |
+                    Valid: ${info.valid} | Time: ${info.time}s</div>
+                <div><strong>Algorithm:</strong> <span class="algorithm-badge ${badgeClass}">${info.method || 'heuristic'}</span>
+                    ${info.optimal ? '&nbsp;<span class="algorithm-badge exact">optimal</span>' : ''}</div>
+            `;
+
+            let groupsHTML = '<h3>Groups:</h3>';
+            selectedRecord.groups.forEach((g, idx) => {
+                groupsHTML += `<div class="group-item">Group ${idx + 1}: ${JSON.stringify(g)}</div>`;
+            });
+            document.getElementById('modal-groups').innerHTML = groupsHTML;
+
+            modal.style.display = 'block';
+        });
+
+        // Delete button
+        document.getElementById('delete-btn').addEventListener('click', async () => {
+            if (!selectedRecordId) return;
+
+            if (!confirm(`Delete this record?\n\nRecord ID: ${selectedRecordId}\n\nThis action cannot be undone.`)) return;
+
+            try {
+                const response = await fetch(`/api/delete/${selectedRecordId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    selectedRecordId = null;
+                    selectedRecord = null;
+                    document.getElementById('display-btn').disabled = true;
+                    document.getElementById('delete-btn').disabled = true;
+                    await loadRecords();
+                } else {
+                    alert('Failed to delete record. Please try again.');
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        });
+
+        // Modal close handlers
+        document.querySelector('.close').addEventListener('click', () => {
+            document.getElementById('modal').style.display = 'none';
+        });
+
+        document.getElementById('modal-close-btn').addEventListener('click', () => {
+            document.getElementById('modal').style.display = 'none';
+        });
+
+        window.addEventListener('click', (event) => {
+            const modal = document.getElementById('modal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+
+        // Modal Export button
+        document.getElementById('modal-export-btn').addEventListener('click', async () => {
+            if (!selectedRecordId) return;
+
+            try {
+                const response = await fetch(`/api/export/${selectedRecordId}`);
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${selectedRecordId}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                } else {
+                    alert('Export failed. Please try again.');
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        });
+
+        // Load records on page load
+        loadRecords();
+    </script>
+</body>
+</html>

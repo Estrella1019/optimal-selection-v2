@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4f5bd5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.svg') }}">
+    <title>Optimal Sample Selection System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="page-wrapper">
+        <div class="container">
+        <header>
+            <h1>Optimal Sample Selection System</h1>
+            <p class="subtitle">CS360 Artificial Intelligence - Group Project</p>
+        </header>
+
+        <main>
+            <!-- Parameters Section -->
+            <section class="card">
+                <h2>Parameters</h2>
+                <div class="preset-bar">
+                    <label>Quick Presets:</label>
+                    <button class="preset-btn" data-m="45" data-n="9" data-k="6" data-j="5" data-s="5" data-T="1">Preset 1</button>
+                    <button class="preset-btn" data-m="50" data-n="12" data-k="5" data-j="4" data-s="4" data-T="1">Preset 2</button>
+                    <button class="preset-btn" data-m="54" data-n="18" data-k="6" data-j="5" data-s="5" data-T="2">Preset 3</button>
+                    <button class="preset-btn" data-m="48" data-n="15" data-k="7" data-j="6" data-s="6" data-T="1">Preset 4</button>
+                </div>
+                <div class="param-info">
+                    <strong>Constraint:</strong> j must satisfy <strong>s &le; j &le; k</strong>.
+                    T = number of heuristic trials (&ge; 1).
+                </div>
+                <div class="params-grid">
+                    <div class="param-group">
+                        <label for="m">m &mdash; Total Samples (45&ndash;54)</label>
+                        <input type="number" id="m" value="45" min="45" max="54">
+                    </div>
+                    <div class="param-group">
+                        <label for="n">n &mdash; Select Samples (7&ndash;25)</label>
+                        <input type="number" id="n" value="9" min="7" max="25">
+                    </div>
+                    <div class="param-group">
+                        <label for="k">k &mdash; Group Size (4&ndash;7)</label>
+                        <input type="number" id="k" value="6" min="4" max="7">
+                    </div>
+                    <div class="param-group">
+                        <label for="j">j &mdash; Subset Size (s&ndash;k)</label>
+                        <input type="number" id="j" value="5" min="3" max="7">
+                    </div>
+                    <div class="param-group">
+                        <label for="s">s &mdash; Coverage (3&ndash;7)</label>
+                        <input type="number" id="s" value="5" min="3" max="7">
+                    </div>
+                    <div class="param-group">
+                        <label for="T">T &mdash; Trials (&ge; 1)</label>
+                        <input type="number" id="T" value="1" min="1">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Sample Selection Section -->
+            <section class="card">
+                <h2>Sample Selection</h2>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="mode" value="random" checked>
+                        Random &mdash; Pick n samples from m randomly
+                    </label>
+                    <label>
+                        <input type="radio" name="mode" value="manual">
+                        Manual &mdash; Enter n sample IDs manually
+                    </label>
+                </div>
+                <div id="manual-input" class="manual-input" style="display: none;">
+                    <label for="samples">Sample IDs (comma-separated, must be exactly n values):</label>
+                    <input type="text" id="samples" placeholder="e.g., 1,5,12,18,22,33,41,44,45">
+                </div>
+            </section>
+
+            <!-- Action Buttons -->
+            <section class="actions">
+                <button id="execute-btn" class="btn btn-primary">Execute</button>
+                <button id="store-btn" class="btn btn-secondary" disabled>Save Result</button>
+                <button id="clear-btn" class="btn btn-secondary">Clear</button>
+            </section>
+
+            <!-- Output Section -->
+            <section class="card">
+                <h2>Output</h2>
+                <div id="output" class="output-box"></div>
+            </section>
+
+            <!-- Bottom Actions -->
+            <section class="bottom-actions">
+                <button id="print-btn" class="btn btn-secondary">Export to File</button>
+                <button id="db-btn" class="btn btn-secondary" onclick="window.location.href='/db'">View Saved Results</button>
+            </section>
+        </main>
+    </div>
+    </div>
+
+    <script>
+        let currentResult = null;
+
+        // Preset parameter buttons
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.getElementById('m').value = btn.dataset.m;
+                document.getElementById('n').value = btn.dataset.n;
+                document.getElementById('k').value = btn.dataset.k;
+                document.getElementById('j').value = btn.dataset.j;
+                document.getElementById('s').value = btn.dataset.s;
+                document.getElementById('T').value = btn.dataset.T;
+            });
+        });
+
+        // Mode toggle
+        document.querySelectorAll('input[name="mode"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const manualInput = document.getElementById('manual-input');
+                manualInput.style.display = e.target.value === 'manual' ? 'block' : 'none';
+            });
+        });
+
+        // Execute button
+        document.getElementById('execute-btn').addEventListener('click', async () => {
+            const executeBtn = document.getElementById('execute-btn');
+            const storeBtn = document.getElementById('store-btn');
+            const output = document.getElementById('output');
+
+            // Disable buttons during execution
+            executeBtn.disabled = true;
+            executeBtn.textContent = 'Running...';
+            storeBtn.disabled = true;
+            currentResult = null;
+
+            // Show loading spinner
+            output.innerHTML = '<div class="loading"><span class="spinner"></span>Initializing solver...</div>';
+
+            // Collect parameters
+            const params = {
+                m: parseInt(document.getElementById('m').value),
+                n: parseInt(document.getElementById('n').value),
+                k: parseInt(document.getElementById('k').value),
+                j: parseInt(document.getElementById('j').value),
+                s: parseInt(document.getElementById('s').value),
+                T: parseInt(document.getElementById('T').value),
+                mode: document.querySelector('input[name="mode"]:checked').value,
+                manual_input: document.getElementById('samples').value
+            };
+
+            try {
+                // Start the solver
+                const response = await fetch('/execute', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(params)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Execution failed');
+                }
+
+                output.innerHTML = `<div class="info">Samples selected: ${data.samples.join(', ')}</div><div class="progress-log"></div>`;
+                const progressLog = output.querySelector('.progress-log');
+
+                // Poll for progress updates
+                async function poll() {
+                    if (!document.getElementById('execute-btn').disabled) return; // cancelled
+
+                    try {
+                        const res = await fetch(`/progress/${data.session_id}`);
+                        const json = await res.json();
+
+                        if (json.status === 'running') {
+                            // Append new log lines
+                            json.logs.forEach(log => {
+                                progressLog.innerHTML += `<div class="log-line">${log}</div>`;
+                                progressLog.scrollTop = progressLog.scrollHeight;
+                            });
+                            // Keep polling more frequently
+                            setTimeout(poll, 200);
+
+                        } else if (json.status === 'done') {
+                            // Show result
+                            currentResult = json.result;
+                            const info = json.result.info;
+                            const method = info.method || 'heuristic';
+                            const optimal = info.optimal || false;
+                            const badgeClass = method === 'exact' ? 'exact' : 'heuristic';
+
+                            let resultHTML = `
+                                <div class="result-summary">
+                                    Found <strong>${info.solution_size} groups</strong>
+                                    &nbsp;
+                                    <span class="algorithm-badge ${badgeClass}">${method}</span>
+                                    ${optimal ? '&nbsp;<span class="algorithm-badge exact">optimal</span>' : ''}
+                                    <br>
+                                    <small>
+                                        Lower bound: ${info.lower_bound} &nbsp;|&nbsp;
+                                        Gap: ${info.gap} &nbsp;|&nbsp;
+                                        Valid: ${info.valid} &nbsp;|&nbsp;
+                                        Time: ${info.time}s
+                                    </small>
+                                </div>
+                                <div class="groups-list">
+                            `;
+
+                            json.result.groups.forEach((g, idx) => {
+                                resultHTML += `<div class="group-item">Group ${idx + 1}: ${JSON.stringify(g)}</div>`;
+                            });
+
+                            resultHTML += '</div>';
+                            progressLog.innerHTML += resultHTML;
+
+                            executeBtn.disabled = false;
+                            executeBtn.textContent = 'Execute';
+                            storeBtn.disabled = false;
+
+                        } else if (json.status === 'error') {
+                            progressLog.innerHTML += `<div class="error">Error: ${json.message}</div>`;
+                            executeBtn.disabled = false;
+                            executeBtn.textContent = 'Execute';
+                        }
+                    } catch (err) {
+                        // Network error — retry quickly
+                        setTimeout(poll, 300);
+                    }
+                }
+
+                poll();
+
+            } catch (error) {
+                output.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                executeBtn.disabled = false;
+                executeBtn.textContent = 'Execute';
+            }
+        });
+
+        // Save result to database
+        document.getElementById('store-btn').addEventListener('click', async () => {
+            if (!currentResult) {
+                alert('No result to save. Please run Execute first.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/store', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(currentResult)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert(`Result saved! Record ID: ${data.id}`);
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        });
+
+        // Clear all fields and output
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            document.getElementById('m').value = '45';
+            document.getElementById('n').value = '9';
+            document.getElementById('k').value = '6';
+            document.getElementById('j').value = '5';
+            document.getElementById('s').value = '5';
+            document.getElementById('T').value = '1';
+            document.getElementById('samples').value = '';
+            document.getElementById('output').innerHTML = '';
+            document.getElementById('store-btn').disabled = true;
+            document.querySelector('input[name="mode"][value="random"]').checked = true;
+            document.getElementById('manual-input').style.display = 'none';
+            currentResult = null;
+        });
+
+        // Export result to text file
+        document.getElementById('print-btn').addEventListener('click', async () => {
+            if (!currentResult) {
+                alert('No result to export. Please run Execute first.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/export', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(currentResult)
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `result_${currentResult.params.m}-${currentResult.params.n}-${currentResult.params.k}-${currentResult.params.j}-${currentResult.params.s}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                } else {
+                    alert('Export failed. Please try again.');
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        });
+    </script>
+</body>
+</html>

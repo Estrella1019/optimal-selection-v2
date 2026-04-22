@@ -1,0 +1,43 @@
+{
+  "id": "45-9-6-6-3-1-1",
+  "params": {
+    "T": 1,
+    "j": 6,
+    "k": 6,
+    "m": 45,
+    "n": 9,
+    "s": 3
+  },
+  "samples": [
+    12,
+    13,
+    21,
+    25,
+    27,
+    28,
+    34,
+    38,
+    44
+  ],
+  "info": {
+    "exact_phase_used": true,
+    "gap": 0,
+    "lower_bound": 1,
+    "method": "exact",
+    "optimal": true,
+    "restarts": 0,
+    "solution_size": 1,
+    "time": 0,
+    "valid": true
+  },
+  "groups": [
+    [
+      12,
+      13,
+      21,
+      25,
+      27,
+      28
+    ]
+  ]
+}

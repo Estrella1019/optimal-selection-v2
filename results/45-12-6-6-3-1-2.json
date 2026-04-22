@@ -1,0 +1,54 @@
+{
+  "id": "45-12-6-6-3-1-2",
+  "params": {
+    "T": 1,
+    "j": 6,
+    "k": 6,
+    "m": 45,
+    "n": 12,
+    "s": 3
+  },
+  "samples": [
+    6,
+    13,
+    15,
+    16,
+    18,
+    20,
+    27,
+    30,
+    33,
+    35,
+    41,
+    43
+  ],
+  "info": {
+    "exact_phase_used": false,
+    "gap": 0,
+    "lower_bound": 2,
+    "method": "heuristic",
+    "optimal": true,
+    "restarts": 1,
+    "solution_size": 2,
+    "time": 0.02,
+    "valid": true
+  },
+  "groups": [
+    [
+      6,
+      15,
+      18,
+      30,
+      33,
+      43
+    ],
+    [
+      13,
+      16,
+      20,
+      27,
+      30,
+      35
+    ]
+  ]
+}
