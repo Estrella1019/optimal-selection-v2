@@ -15,7 +15,11 @@ Run:
 import sys
 import time
 from math import comb
-from algorithm import solve, verify, preprocess, counting_lower_bound
+from algorithm import (
+    solve, verify, preprocess, counting_lower_bound,
+    _construction_budget_fraction, _default_time_limit_for,
+    _quality_search_allowed,
+)
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
@@ -128,6 +132,39 @@ def tier2():
     return results
 
 
+def quality_regression():
+    banner("QUALITY — n=20 generalized covering target")
+    sol, info = solve(list(range(1, 21)), k=6, j=5, s=4, T=1,
+                      time_limit=120, seed=42, verbose=True)
+    assert info["valid"], "solver returned invalid coverage"
+    assert info["solution_size"] <= 180, (
+        "quality regression: expected the dedicated LNS search to beat the "
+        f"old ~189-group plateau, got {info['solution_size']}"
+    )
+    return sol, info
+
+
+def no_duplicate_groups_regression():
+    banner("QUALITY — no duplicate groups for multi-cover")
+    sol, info = solve(list(range(1, 8)), k=6, j=5, s=5, T=2,
+                      time_limit=30, seed=42, verbose=True)
+    assert info["valid"], "solver returned invalid coverage"
+    assert len(sol) == len(set(tuple(g) for g in sol)), (
+        "solver should not use the same k-group more than once"
+    )
+    return sol, info
+
+
+def adaptive_budget_regression():
+    banner("QUALITY — adaptive time budget policy")
+    assert _default_time_limit_for(20, 6, 5) == 120.0
+    assert _default_time_limit_for(25, 6, 6) == 600.0
+    assert _quality_search_allowed(20, 6, 5)
+    assert not _quality_search_allowed(25, 6, 6)
+    assert _construction_budget_fraction(True, 120.0) == 0.42
+    assert _construction_budget_fraction(False, 600.0) == 0.70
+
+
 # ── Tier 3: stress / worst-case timing ──────────────────────────────────────
 
 def tier3():
@@ -159,6 +196,12 @@ def tier3():
 
 def main():
     tier_arg = None
+    if "--quality" in sys.argv:
+        adaptive_budget_regression()
+        quality_regression()
+        no_duplicate_groups_regression()
+        return
+
     if "--tier" in sys.argv:
         idx = sys.argv.index("--tier")
         tier_arg = int(sys.argv[idx + 1])

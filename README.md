@@ -12,9 +12,12 @@ This project implements a **hybrid optimization solver** for the **Covering Desi
 
 The system features:
 - **Exact + Heuristic hybrid solver** with Numba JIT acceleration (30× faster on large instances)
+- **Quality search with full-bitset compression** — LNS destroy-and-repair for tighter solutions on medium instances
+- **Adaptive runtime budgets** — 120s–600s based on problem scale
 - **Real-time progress streaming** via polling-based SSE
 - **Mobile-responsive web UI** supporting both random and manual sample input
 - **Persistent result database** with export and management features
+- **Automated test suite** with three tiers (correctness, quality, stress)
 
 ---
 
@@ -48,7 +51,7 @@ Group 2:  [1, 3, 22, 33, 41, 44]
 
 ## Algorithm Architecture
 
-### Three-Layer Acceleration Design
+### Four-Layer Acceleration Design
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -77,6 +80,17 @@ Group 2:  [1, 3, 22, 33, 41, 44]
 │                                                    ║    │
 │  ═══════════════════════════════════════════════════╝    │
 │              Global optimal or best-known bound            │
+└──────────────────────────┬──────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 4 — Quality Search (v2, T=1 medium instances)        │
+│                                                             │
+│  ┌──────────────────┐  ┌────────────────┐  ┌────────────┐  │
+│  │ Global greedy    │→ │ Fixed-B descent│→ │ LNS destroy│  │
+│  │ (bitset encode)  │  │ compression    │  │ & repair   │  │
+│  └──────────────────┘  └────────────────┘  └────────────┘  │
+│                                                             │
+│  + Local search swap polish (remaining time budget)         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -89,6 +103,11 @@ Group 2:  [1, 3, 22, 33, 41, 44]
 5. **Local Search (Swap)** — Try replacing each group with a sample outside it.
 6. **Warm-start Mechanism** — Pre-solve smaller variants to seed the heuristic.
 7. **Numba JIT + Parallel** — 40+ parallel loops, ~30× speedup on large instances.
+8. **Full-Bitset Quality Search** *(v2)* — Global greedy construction + fixed-B descent compression using Python big-integer bitsets for medium instances (e.g. n=20, k=6, j=5, s=4: ~185 → ~178 groups).
+9. **LNS Destroy-and-Repair** *(v2)* — Randomly removes overlapping groups and repairs with bounded DFS; adaptive destroy size when search stalls.
+10. **Adaptive Time Budgets** *(v2)* — Automatically allocates 120s / 300s / 600s based on `n_j × n_cand`; partitions time between construction phase (65%) and quality search phase.
+11. **Scale Protection** *(v2)* — Skips full-bitset search when `n_j × n_cand > 50M` to avoid memory blowup on large instances.
+12. **K-Group Deduplication** *(v2)* — Prevents duplicate groups from being selected, including multi-cover (T>1) scenarios.
 
 ---
 
@@ -163,20 +182,21 @@ python test_algorithm.py
 ## File Structure
 
 ```
-optimal_sampler/
-├── web_app.py              # Flask web app (S1 + S2)
-├── algorithm.py            # Core solver (hybrid exact + heuristic)
+optimal-selection-v2/
+├── algorithm.py                # Core solver (hybrid exact + heuristic + quality search)
+├── web_app.py                  # Flask web app (S1 + S2)
+├── app.py                      # Desktop GUI (tkinter)
 ├── algorithm_documentation.md  # Full algorithm documentation
-├── test_algorithm.py       # Three-tier automated test suite
-├── presentation_outline.md # Presentation script outline
-├── start.sh                # Launcher script
+├── IMPROVEMENTS.md             # v2 improvement summary
+├── test_algorithm.py           # Three-tier automated test suite
+├── start.sh                    # Launcher script
 ├── static/
-│   ├── css/style.css       # Styling
-│   └── favicon.svg         # Favicon
+│   ├── css/style.css           # Styling
+│   └── favicon.svg             # Favicon
 ├── templates/
-│   ├── index.html          # S1 — Computation UI
-│   └── database.html       # S2 — Database browser
-└── results/                # Saved results (auto-created, one JSON per record)
+│   ├── index.html              # S1 — Computation UI
+│   └── database.html           # S2 — Database browser
+└── results/                    # Saved results (auto-created, one JSON per record)
 ```
 
 ---
